@@ -43,48 +43,72 @@
 
       <input id="postType" type="hidden" value="live">
 
-      <div class="grid two">
-        <div class="field">
-          <label for="title">핵심 제목</label>
-          <input id="title" placeholder="예: 2026 New Odyssey G8 론칭 라이브">
-        </div>
-        <div class="field">
-          <label for="persona">화자</label>
-          <input id="persona" value="뽀리">
-        </div>
-      </div>
-
-
-        <div class="grid two">
-          <div class="field">
-            <label for="brand">브랜드/판매처</label>
-            <input id="brand" value="오제앤에스">
+      <div class="form-stack">
+        <div class="form-section">
+          <div class="section-title">
+            <span>01</span>
+            <div>
+              <strong>기본 정보</strong>
+              <p>포스팅의 중심이 되는 제목과 브랜드를 입력하세요.</p>
+            </div>
           </div>
-          <div class="field hidden-field">
-            <label for="season">시즌 문맥</label>
-            <input id="season" value="5월 가정의 달">
+          <div class="grid two">
+            <div class="field">
+              <label for="title">핵심 제목</label>
+              <input id="title" placeholder="예: 2026 New Odyssey G8 론칭 라이브">
+            </div>
+            <div class="field">
+              <label for="persona">화자</label>
+              <input id="persona" value="뽀리">
+            </div>
+          </div>
+
+          <div class="grid two">
+            <div class="field">
+              <label for="brand">브랜드/판매처</label>
+              <input id="brand" value="오제앤에스">
+            </div>
+            <div class="field hidden-field">
+              <label for="season">시즌 문맥</label>
+              <input id="season" value="5월 가정의 달">
+            </div>
+          </div>
+
+          <div class="field generated-field hidden-field">
+            <label for="summary">도입에서 강조할 상황</label>
+            <textarea id="summary" rows="3" readonly placeholder="초안 만들기를 누르면 자동으로 생성됩니다."></textarea>
           </div>
         </div>
 
-        <div class="field generated-field hidden-field">
-          <label for="summary">도입에서 강조할 상황</label>
-          <textarea id="summary" rows="3" readonly placeholder="초안 만들기를 누르면 자동으로 생성됩니다."></textarea>
+        <div class="form-section">
+          <div class="section-title">
+            <span>02</span>
+            <div>
+              <strong>라이브 일정</strong>
+              <p>입력한 날짜에 맞춰 시즌 문맥은 자동으로 잡습니다.</p>
+            </div>
+          </div>
+          <div class="grid two">
+            <div id="dateField" class="field">
+              <label id="dateLabel" for="date">일정</label>
+              <input id="date" placeholder="예: 5월 20일">
+            </div>
+            <div id="timeField" class="field">
+              <label id="timeLabel" for="time">시간</label>
+              <input id="time" placeholder="예: 13시 ~ 14시">
+            </div>
+          </div>
         </div>
 
-      <div class="grid two">
-        <div id="dateField" class="field">
-          <label id="dateLabel" for="date">일정</label>
-          <input id="date" placeholder="예: 5월 20일">
-        </div>
-        <div id="timeField" class="field">
-          <label id="timeLabel" for="time">시간</label>
-          <input id="time" placeholder="예: 13시 ~ 14시">
-        </div>
-      </div>
-
-      <div id="productSection" class="product-section">
-        <div class="section-head">
-          <label id="productSectionLabel">상품 구성</label>
+        <div id="productSection" class="form-section product-section">
+          <div class="section-head">
+            <div class="section-title">
+              <span>03</span>
+              <div>
+                <strong id="productSectionLabel">상품 구성</strong>
+                <p>상품명과 가격만 적어도 추천 포인트는 자동으로 채웁니다.</p>
+              </div>
+            </div>
             <div class="actions compact">
               <button id="fillProductPoints" class="hidden-field" type="button">포인트 자동 생성</button>
               <button id="addProduct" type="button">상품 추가</button>
@@ -95,34 +119,45 @@
             <summary>직접 입력으로 수정</summary>
             <textarea id="products" rows="5" placeholder="한 줄에 하나씩 입력하세요. 예: 오디세이 G8 LS27HG806 | 최종체감가 946,148원 | 27형 고해상도 게이밍 모니터"></textarea>
           </details>
-      </div>
-
-      <div id="benefitsField" class="field">
-        <label id="benefitsLabel" for="benefits">혜택/이벤트</label>
-        <textarea id="benefits" rows="4" placeholder="예: 소통 이벤트 네이버페이 5천원 / 구매인증 이벤트 네이버페이 1만원 / 포토리뷰 최대 3만원"></textarea>
-      </div>
-
-        <div class="field generated-field hidden-field">
-          <label for="recommend">추천 대상</label>
-          <textarea id="recommend" rows="4" readonly placeholder="초안 만들기를 누르면 자동으로 생성됩니다."></textarea>
         </div>
 
-      <div id="linkField" class="field">
-        <label id="linkLabel" for="link">링크</label>
-        <input id="link" placeholder="상품 또는 라이브 URL">
-      </div>
-      <div class="field">
-        <label for="tone">원고 톤</label>
-        <select id="tone">
-          <option value="friendly">친근한 뽀리 톤</option>
-          <option value="clean">짧고 깔끔한 정보형</option>
-          <option value="sales">구매 유도 강조형</option>
-          <option value="detail">상세 설명형</option>
-        </select>
-      </div>
-      <div class="actions">
-        <button id="generate" class="primary" type="button">초안 만들기</button>
-        <button id="clear" type="button">비우기</button>
+        <div class="form-section">
+          <div class="section-title">
+            <span>04</span>
+            <div>
+              <strong>혜택과 링크</strong>
+              <p>복사할 때 빠지기 쉬운 이벤트와 바로가기 링크를 정리하세요.</p>
+            </div>
+          </div>
+          <div id="benefitsField" class="field">
+            <label id="benefitsLabel" for="benefits">혜택/이벤트</label>
+            <textarea id="benefits" rows="4" placeholder="예: 소통 이벤트 네이버페이 5천원 / 구매인증 이벤트 네이버페이 1만원 / 포토리뷰 최대 3만원"></textarea>
+          </div>
+
+          <div class="field generated-field hidden-field">
+            <label for="recommend">추천 대상</label>
+            <textarea id="recommend" rows="4" readonly placeholder="초안 만들기를 누르면 자동으로 생성됩니다."></textarea>
+          </div>
+
+          <div id="linkField" class="field">
+            <label id="linkLabel" for="link">링크</label>
+            <input id="link" placeholder="상품 또는 라이브 URL">
+          </div>
+          <div class="field">
+            <label for="tone">원고 톤</label>
+            <select id="tone">
+              <option value="friendly">친근한 뽀리 톤</option>
+              <option value="clean">짧고 깔끔한 정보형</option>
+              <option value="sales">구매 유도 강조형</option>
+              <option value="detail">상세 설명형</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="actions form-actions">
+          <button id="generate" class="primary" type="button">초안 만들기</button>
+          <button id="clear" type="button">비우기</button>
+        </div>
       </div>
     </section>
 
