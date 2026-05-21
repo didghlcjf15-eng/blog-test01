@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>블로그 초안 생성기</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app">
+    <section class="panel controls" aria-label="초안 입력">
+      <div class="brand">
+        <p>오제앤에스 블로그</p>
+        <h1>포스팅 초안 생성기</h1>
+      </div>
+
+      <div id="apiBox" class="api-box">
+        <div class="api-copy">
+          <strong>🔑 Gemini API 키 설정</strong>
+          <p>Google AI Studio에서 발급한 API 키를 입력하세요.</p>
+          <p>키는 이 브라우저에만 저장되며, 초안 생성 시 Google Gemini API 호출에만 사용됩니다.</p>
+          <p>API 키 발급: <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer">aistudio.google.com</a> → Get API key → Create API key</p>
+          <p>무료 플랜은 Flash 계열 기준 분당 15회 생성으로 시작하기 좋습니다.</p>
+        </div>
+        <div class="api-fields">
+          <div class="field">
+            <label for="apiKey">Gemini API 키</label>
+            <input id="apiKey" type="password" autocomplete="off" placeholder="AIza...">
+          </div>
+          <div class="field">
+            <label for="model">모델</label>
+            <select id="model">
+              <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+              <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
+            </select>
+          </div>
+        </div>
+        <div class="api-actions">
+          <button id="saveApiKey" type="button">API 키 저장</button>
+          <span id="apiSavedText">저장 전</span>
+        </div>
+      </div>
+
+      <input id="postType" type="hidden" value="live">
+
+      <div class="grid two">
+        <div class="field">
+          <label for="title">핵심 제목</label>
+          <input id="title" placeholder="예: 2026 New Odyssey G8 론칭 라이브">
+        </div>
+        <div class="field">
+          <label for="persona">화자</label>
+          <input id="persona" value="뽀리">
+        </div>
+      </div>
+
+
+        <div class="grid two">
+          <div class="field">
+            <label for="brand">브랜드/판매처</label>
+            <input id="brand" value="오제앤에스">
+          </div>
+          <div class="field hidden-field">
+            <label for="season">시즌 문맥</label>
+            <input id="season" value="5월 가정의 달">
+          </div>
+        </div>
+
+        <div class="field generated-field hidden-field">
+          <label for="summary">도입에서 강조할 상황</label>
+          <textarea id="summary" rows="3" readonly placeholder="초안 만들기를 누르면 자동으로 생성됩니다."></textarea>
+        </div>
+
+      <div class="grid two">
+        <div id="dateField" class="field">
+          <label id="dateLabel" for="date">일정</label>
+          <input id="date" placeholder="예: 5월 20일">
+        </div>
+        <div id="timeField" class="field">
+          <label id="timeLabel" for="time">시간</label>
+          <input id="time" placeholder="예: 13시 ~ 14시">
+        </div>
+      </div>
+
+      <div id="productSection" class="product-section">
+        <div class="section-head">
+          <label id="productSectionLabel">상품 구성</label>
+            <div class="actions compact">
+              <button id="fillProductPoints" class="hidden-field" type="button">포인트 자동 생성</button>
+              <button id="addProduct" type="button">상품 추가</button>
+            </div>
+          </div>
+          <div id="productCards" class="product-cards" aria-label="상품 입력 목록"></div>
+          <details class="raw-products">
+            <summary>직접 입력으로 수정</summary>
+            <textarea id="products" rows="5" placeholder="한 줄에 하나씩 입력하세요. 예: 오디세이 G8 LS27HG806 | 최종체감가 946,148원 | 27형 고해상도 게이밍 모니터"></textarea>
+          </details>
+      </div>
+
+      <div id="benefitsField" class="field">
+        <label id="benefitsLabel" for="benefits">혜택/이벤트</label>
+        <textarea id="benefits" rows="4" placeholder="예: 소통 이벤트 네이버페이 5천원 / 구매인증 이벤트 네이버페이 1만원 / 포토리뷰 최대 3만원"></textarea>
+      </div>
+
+        <div class="field generated-field hidden-field">
+          <label for="recommend">추천 대상</label>
+          <textarea id="recommend" rows="4" readonly placeholder="초안 만들기를 누르면 자동으로 생성됩니다."></textarea>
+        </div>
+
+      <div id="linkField" class="field">
+        <label id="linkLabel" for="link">링크</label>
+        <input id="link" placeholder="상품 또는 라이브 URL">
+      </div>
+      <div class="field">
+        <label for="tone">원고 톤</label>
+        <select id="tone">
+          <option value="friendly">친근한 뽀리 톤</option>
+          <option value="clean">짧고 깔끔한 정보형</option>
+          <option value="sales">구매 유도 강조형</option>
+          <option value="detail">상세 설명형</option>
+        </select>
+      </div>
+      <div class="actions">
+        <button id="generate" class="primary" type="button">초안 만들기</button>
+        <button id="clear" type="button">비우기</button>
+      </div>
+    </section>
+
+    <section class="panel output" aria-label="생성 결과">
+      <div class="output-head">
+        <div>
+          <p>Generated Draft</p>
+          <h2>블로그 원고</h2>
+        </div>
+        <div class="actions compact">
+          <button id="copyTitles" type="button">제목 복사</button>
+          <button id="copyHashtags" type="button">태그 복사</button>
+          <button id="copy" type="button">본문 복사</button>
+          <button id="download" type="button">TXT 저장</button>
+        </div>
+      </div>
+      <div class="meta-output">
+        <div class="field">
+          <label for="postTitles">포스팅 제목 후보</label>
+          <textarea id="postTitles" rows="3" spellcheck="false" placeholder="초안을 만들면 자동 생성됩니다."></textarea>
+        </div>
+        <div class="field">
+          <label for="hashtags">해시태그</label>
+          <textarea id="hashtags" rows="2" spellcheck="false" placeholder="초안을 만들면 자동 생성됩니다."></textarea>
+        </div>
+      </div>
+      <textarea id="draft" spellcheck="false" aria-label="생성된 블로그 원고"></textarea>
+      <p id="status" class="status" role="status"></p>
+    </section>
+  </main>
+
+  <div id="loadingOverlay" class="loading-overlay" hidden>
+    <div class="loading-card" role="status" aria-live="polite">
+      <div class="loader" aria-hidden="true"></div>
+      <strong id="loadingTitle">생성 중입니다</strong>
+      <p id="loadingMessage">잠시만 기다려 주세요.</p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
