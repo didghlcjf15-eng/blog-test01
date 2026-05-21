@@ -1,6 +1,7 @@
 const fields = {
   apiKey: document.querySelector("#apiKey"),
   model: document.querySelector("#model"),
+  modelSheetUrl: document.querySelector("#modelSheetUrl"),
   postType: document.querySelector("#postType"),
   title: document.querySelector("#title"),
   persona: document.querySelector("#persona"),
@@ -27,6 +28,7 @@ const productCards = document.querySelector("#productCards");
 const apiBox = document.querySelector("#apiBox");
 const saveApiKeyButton = document.querySelector("#saveApiKey");
 const apiSavedText = document.querySelector("#apiSavedText");
+const loadModelSheetButton = document.querySelector("#loadModelSheet");
 const loadingOverlay = document.querySelector("#loadingOverlay");
 const loadingTitle = document.querySelector("#loadingTitle");
 const loadingMessage = document.querySelector("#loadingMessage");
@@ -43,6 +45,15 @@ const adaptiveUi = {
 };
 let productDrafts = [];
 let syncingProducts = false;
+let modelOptions = [];
+let resolvedModelCache = {
+  apiKey: "",
+  selection: "",
+  model: "",
+};
+
+const defaultModelSheetUrl = "https://docs.google.com/spreadsheets/d/15Fdqhj7bayYRKLNNUgvQGPkmVCHL7xuUrBSXUnEAi2Y/edit?gid=617307473#gid=617307473";
+const fallbackGeminiModel = "gemini-3.1-flash-lite";
 
 const formPresets = {
   live: {
@@ -90,19 +101,45 @@ const defaultSample = {
     link: "https://view.shoppinglive.naver.com/",
 };
 
-function createProductDraft(name = "", price = "", points = "") {
+function createProductDraft(name = "", model = "", price = "", points = "") {
   return {
     id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
     name,
+    model,
     price,
     points,
   };
 }
 
+function productDisplayName(product, fallback = "상품") {
+  return [product.name, product.model]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join(" ") || fallback;
+}
+
+function modelControlHtml(product) {
+  if (!modelOptions.length) {
+    return `<input class="product-model" placeholder="예: LS27HG806" value="${escapeHtml(product.model)}">`;
+  }
+
+  const options = [...modelOptions];
+  if (product.model && !options.includes(product.model)) options.unshift(product.model);
+  const optionHtml = [
+    `<option value="">모델명 선택</option>`,
+    ...options.map((modelName) => {
+      const selected = modelName === product.model ? " selected" : "";
+      return `<option value="${escapeHtml(modelName)}"${selected}>${escapeHtml(modelName)}</option>`;
+    }),
+  ].join("");
+
+  return `<select class="product-model">${optionHtml}</select>`;
+}
+
 function productsToText(products) {
   return products
     .map((product) => {
-      const parts = [product.name, product.price, product.points]
+      const parts = [product.name, product.model, product.price, product.points]
         .map((part) => String(part || "").trim())
         .filter(Boolean);
       return parts.join(" || ");
@@ -119,8 +156,29 @@ function parseProductsText(text) {
     .map((line) => {
       const separator = line.includes("||") ? "||" : "|";
       const parts = line.split(separator).map((part) => part.trim());
-      return createProductDraft(parts[0] || "", parts[1] || "", parts.slice(2).join(" | "));
+      if (parts.length >= 4) {
+        return createProductDraft(parts[0] || "", parts[1] || "", parts[2] || "", parts.slice(3).join(" | "));
+      }
+
+      const legacyName = splitLegacyProductName(parts[0] || "");
+      return createProductDraft(legacyName.name, legacyName.model, parts[1] || "", parts.slice(2).join(" | "));
     });
+}
+
+function splitLegacyProductName(text) {
+  const source = String(text || "").trim();
+  const tokens = source.split(/\s+/);
+  const lastToken = tokens[tokens.length - 1] || "";
+  const looksLikeModel = /[A-Za-z]/.test(lastToken) && /\d/.test(lastToken);
+
+  if (tokens.length > 1 && looksLikeModel) {
+    return {
+      name: tokens.slice(0, -1).join(" "),
+      model: lastToken,
+    };
+  }
+
+  return { name: source, model: "" };
 }
 
 function syncProductsTextarea() {
@@ -142,9 +200,15 @@ function renderProductCards() {
         <span class="product-card-title">상품 ${index + 1}</span>
         <button class="remove-product" type="button">삭제</button>
       </div>
-      <div class="field">
-        <label>상품명/모델명</label>
-        <input class="product-name" placeholder="예: 오디세이 G8 LS27HG806" value="${escapeHtml(product.name)}">
+      <div class="grid two product-identity">
+        <div class="field">
+          <label>상품명</label>
+          <input class="product-name" placeholder="예: 오디세이 G8" value="${escapeHtml(product.name)}">
+        </div>
+        <div class="field">
+          <label>모델명</label>
+          ${modelControlHtml(product)}
+        </div>
       </div>
       <div class="field">
         <label>혜택가/가격</label>
@@ -238,6 +302,224 @@ function hideLoading() {
   loadingOverlay.hidden = true;
 }
 
+function normalizeModelName(name) {
+  return String(name || "").replace(/^models\//, "").trim();
+}
+
+function modelVersionScore(name) {
+  const match = normalizeModelName(name).match(/gemini-(\d+)(?:\.(\d+))?/i);
+  if (!match) return 0;
+  return Number(match[1]) * 1000 + Number(match[2] || 0) * 10;
+}
+
+function modelFamilyScore(name) {
+  const text = normalizeModelName(name).toLowerCase();
+  if (text.includes("flash-lite")) return 6;
+  if (text.includes("flash")) return 4;
+  return 0;
+}
+
+function isUsableTextModel(model) {
+  const name = normalizeModelName(model.name).toLowerCase();
+  const methods = model.supportedGenerationMethods || [];
+  return (
+    name.includes("gemini") &&
+    name.includes("flash") &&
+    !name.includes("image") &&
+    !name.includes("embedding") &&
+    methods.includes("generateContent")
+  );
+}
+
+function chooseBestGeminiModel(models) {
+  const candidates = models
+    .filter(isUsableTextModel)
+    .map((model) => normalizeModelName(model.name))
+    .sort((a, b) => {
+      const versionDiff = modelVersionScore(b) - modelVersionScore(a);
+      if (versionDiff) return versionDiff;
+      return modelFamilyScore(b) - modelFamilyScore(a);
+    });
+
+  return candidates.find((name) => name.includes("flash-lite")) || candidates[0] || fallbackGeminiModel;
+}
+
+async function resolveGeminiModel() {
+  const apiKey = value("apiKey");
+  const selection = value("model", "auto");
+  if (selection !== "auto") return normalizeModelName(selection);
+  if (!apiKey) return fallbackGeminiModel;
+
+  if (
+    resolvedModelCache.apiKey === apiKey &&
+    resolvedModelCache.selection === selection &&
+    resolvedModelCache.model
+  ) {
+    return resolvedModelCache.model;
+  }
+
+  try {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
+    if (!response.ok) throw new Error("모델 목록을 불러오지 못했습니다.");
+    const data = await response.json();
+    const model = chooseBestGeminiModel(Array.isArray(data.models) ? data.models : []);
+    resolvedModelCache = { apiKey, selection, model };
+    return model;
+  } catch {
+    return fallbackGeminiModel;
+  }
+}
+
+function parseSheetSource(url) {
+  const source = String(url || "").trim();
+  if (!source) return null;
+
+  const idMatch = source.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (!idMatch) return null;
+
+  const gidMatch = source.match(/[?&#]gid=([0-9]+)/);
+  return {
+    id: idMatch[1],
+    gid: gidMatch ? gidMatch[1] : "",
+  };
+}
+
+function sheetSourceToCsvUrl(source) {
+  const sheetSelector = source.gid ? `gid=${encodeURIComponent(source.gid)}` : `sheet=${encodeURIComponent("PVI자료")}`;
+  return `https://docs.google.com/spreadsheets/d/${source.id}/gviz/tq?tqx=out:csv&${sheetSelector}`;
+}
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+
+    if (char === "\"" && inQuotes && next === "\"") {
+      cell += "\"";
+      index += 1;
+    } else if (char === "\"") {
+      inQuotes = !inQuotes;
+    } else if (char === "," && !inQuotes) {
+      row.push(cell);
+      cell = "";
+    } else if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && next === "\n") index += 1;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += char;
+    }
+  }
+
+  row.push(cell);
+  rows.push(row);
+  return rows;
+}
+
+function extractModelOptions(csvText) {
+  const values = parseCsv(csvText)
+    .map((row) => ({
+      status: String(row[3] || "").trim(),
+      model: String(row[4] || "").trim(),
+    }))
+    .filter((row) => row.status === "운영중")
+    .map((row) => row.model)
+    .filter(Boolean)
+    .filter((item) => !/^(모델명|model|model name)$/i.test(item));
+
+  return [...new Set(values)];
+}
+
+function sheetSourceToJsonpUrl(source, callbackName) {
+  const query = "select D,E where D = '운영중'";
+  const sheetSelector = source.gid ? `gid=${encodeURIComponent(source.gid)}` : `sheet=${encodeURIComponent("PVI자료")}`;
+  return `https://docs.google.com/spreadsheets/d/${source.id}/gviz/tq?tq=${encodeURIComponent(query)}&tqx=responseHandler:${callbackName}&${sheetSelector}`;
+}
+
+function loadSheetDataWithJsonp(source) {
+  return new Promise((resolve, reject) => {
+    const callbackName = `__modelSheetCallback_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const script = document.createElement("script");
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("시트 응답 시간이 초과되었습니다."));
+    }, 12000);
+
+    function cleanup() {
+      window.clearTimeout(timer);
+      delete window[callbackName];
+      script.remove();
+    }
+
+    window[callbackName] = (data) => {
+      cleanup();
+      resolve(data);
+    };
+
+    script.onerror = () => {
+      cleanup();
+      reject(new Error("시트 스크립트를 불러오지 못했습니다."));
+    };
+
+    script.src = sheetSourceToJsonpUrl(source, callbackName);
+    document.body.appendChild(script);
+  });
+}
+
+function extractModelOptionsFromGviz(data) {
+  const rows = data?.table?.rows || [];
+  const values = rows
+    .map((row) => String(row.c?.[1]?.v || row.c?.[1]?.f || "").trim())
+    .filter(Boolean)
+    .filter((item) => !/^(모델명|model|model name)$/i.test(item));
+
+  return [...new Set(values)];
+}
+
+async function loadModelOptionsFromSheet() {
+  const sheetSource = parseSheetSource(value("modelSheetUrl"));
+  if (!sheetSource) {
+    fields.status.textContent = "모델명 목록을 가져올 구글시트 링크를 입력해 주세요.";
+    return;
+  }
+
+  loadModelSheetButton.disabled = true;
+  fields.status.textContent = "구글시트에서 모델명 목록을 불러오는 중입니다.";
+
+  try {
+    const sheetData = await loadSheetDataWithJsonp(sheetSource);
+    modelOptions = extractModelOptionsFromGviz(sheetData);
+
+    if (!modelOptions.length) {
+      const response = await fetch(sheetSourceToCsvUrl(sheetSource));
+      if (!response.ok) throw new Error(`시트 응답 오류 ${response.status}`);
+      const csvText = await response.text();
+      modelOptions = extractModelOptions(csvText);
+    }
+
+    if (!modelOptions.length) {
+      fields.status.textContent = "PVI자료 시트에서 D열이 운영중인 E열 모델명을 찾지 못했습니다.";
+      return;
+    }
+
+    renderProductCards();
+    syncProductsTextarea();
+    saveState();
+    fields.status.textContent = `모델명 ${modelOptions.length}개를 불러왔습니다.`;
+  } catch (error) {
+    fields.status.textContent = `모델명 목록을 불러오지 못했습니다. 시트 공유 설정, PVI자료 시트명, D/E열 위치를 확인해 주세요.`;
+  } finally {
+    loadModelSheetButton.disabled = false;
+  }
+}
+
 function updateApiBoxState(collapsed = false) {
   const hasKey = Boolean(value("apiKey"));
   apiBox.classList.toggle("saved", collapsed && hasKey);
@@ -252,11 +534,11 @@ function listFromText(text) {
 }
 
 function productLines(text) {
-  const products = productDrafts.filter((product) => product.name.trim() || product.price.trim() || product.points.trim());
+  const products = productDrafts.filter((product) => product.name.trim() || product.model.trim() || product.price.trim() || product.points.trim());
 
   if (products.length) {
     return products.map((product, index) => {
-      const lines = [`${index + 1}️⃣ ${product.name.trim() || `상품 ${index + 1}`}`];
+      const lines = [`${index + 1}️⃣ ${productDisplayName(product, `상품 ${index + 1}`)}`];
       if (product.price.trim()) lines.push(`👉 ${product.price.trim()}`);
 
       product.points
@@ -272,7 +554,7 @@ function productLines(text) {
   }
 
   return parseProductsText(text).map((product, index) => {
-    const lines = [`${index + 1}️⃣ ${product.name.trim() || `상품 ${index + 1}`}`];
+    const lines = [`${index + 1}️⃣ ${productDisplayName(product, `상품 ${index + 1}`)}`];
     if (product.price.trim()) lines.push(`👉 ${product.price.trim()}`);
     if (product.points.trim()) lines.push(`✔ ${product.points.trim()}`);
     return lines.join("\n");
@@ -283,7 +565,8 @@ function mainProductName() {
   if (!productsAreEnabled()) return value("title", "이번 소식");
   const firstLine = value("products").split("\n").map((line) => line.trim()).find(Boolean);
   if (!firstLine) return value("title", "이번 소식");
-  return firstLine.split("||")[0].split("|")[0].trim() || value("title", "이번 소식");
+  const firstProduct = parseProductsText(firstLine)[0];
+  return firstProduct ? productDisplayName(firstProduct, value("title", "이번 소식")) : value("title", "이번 소식");
 }
 
 function fallbackAutoFields(meta) {
@@ -296,6 +579,8 @@ function fallbackAutoFields(meta) {
     `${season}, ${product}를 눈여겨보고 계셨던 분들께 반가운 ${meta.label} 소식이 준비되었습니다.`,
     `${benefit}을 중심으로 일정과 상품 구성을 한 번에 확인할 수 있어 구매를 고민하셨던 분들께 좋은 타이밍이 될 수 있어요.`,
     `${title} 관련 핵심 내용을 뽀리와 함께 차근차근 살펴보겠습니다.`,
+    "특히 라이브 특가는 방송 시간에 혜택이 집중되는 경우가 많아 미리 일정과 상품 구성을 확인해두는 것이 좋습니다.",
+    "모델별 특징과 가격대를 함께 비교하면 내 사용 환경에 맞는 선택을 조금 더 편하게 할 수 있습니다.",
   ];
 
   const productHints = value("products")
@@ -309,6 +594,8 @@ function fallbackAutoFields(meta) {
     "라이브 특가나 기간 한정 프로모션을 기다리셨던 분",
     "제품 구성과 가격 혜택을 한 번에 비교하고 싶은 분",
     "공간과 사용 목적에 맞는 디스플레이 제품을 찾는 분",
+    "방송 시간 전에 미리 혜택을 체크해두고 알림을 설정해두고 싶은 분",
+    "게임, 영상 감상, 업무 등 여러 용도로 활용할 모니터를 고민하는 분",
   ];
 
   productHints.forEach((parts) => {
@@ -340,7 +627,9 @@ function buildGenerationPrompt(meta) {
     "기존 원고 톤: 친근한 한국어, 화자 뽀리, 시즌 공감, 부드러운 구매/참여 유도, 과장보다 실용적 정리.",
     `이번 원고 톤: ${tonePrompts[value("tone", "friendly")]}`,
     "반드시 JSON만 반환하세요. 형식은 {\"summary\":\"문단\", \"recommendations\":[\"추천 대상\"], \"titles\":[\"제목\"], \"hashtags\":[\"#태그\"]} 입니다.",
-    "summary는 2~3문장으로 자연스럽게 작성하고, recommendations는 4~6개로 작성하세요.",
+    "최종 블로그 본문이 공백 포함 2,300~2,700자 정도가 되도록 summary와 recommendations를 충분히 풍성하게 작성하세요.",
+    "summary는 5~7문장으로 자연스럽게 작성하고, 시즌 공감, 제품을 찾는 상황, 라이브를 챙겨야 하는 이유를 포함하세요.",
+    "recommendations는 6~8개로 작성하되, 각 항목은 단순 명사형이 아니라 독자가 자기 상황을 떠올릴 수 있는 한 문장으로 작성하세요.",
     "titles는 네이버 블로그용 제목 후보 3개를 작성하세요. 핵심 키워드, 행사명, 상품명이 앞쪽에 오도록 해주세요.",
     "hashtags는 8~14개를 작성하세요. 공백 없이 #으로 시작하고, 브랜드/상품/행사/용도 키워드를 섞어주세요.",
     "",
@@ -360,25 +649,28 @@ function buildProductPointsPrompt() {
     "아래 상품 목록을 바탕으로 각 상품의 블로그용 특징/추천 포인트를 생성해 주세요.",
     `톤: ${tonePrompts[value("tone", "friendly")]} 실용적이고 구매 판단에 도움이 되는 문장으로 작성하세요.`,
     "반드시 JSON만 반환하세요. 형식은 {\"products\":[{\"name\":\"상품명\", \"points\":\"포인트\"}]} 입니다.",
-    "points는 상품마다 2~3줄로 작성하고, 줄바꿈은 \\n으로 표현하세요.",
+    "points는 상품마다 4~5줄로 작성하고, 각 줄은 45~70자 정도의 자연스러운 설명문으로 작성하세요.",
+    "단순 스펙 나열보다 어떤 사용자에게 어떤 상황에서 좋은지, 가격 혜택과 함께 보면 좋은 이유를 포함하세요.",
     "",
     `원고 유형: ${typeMeta[value("postType", "live")].label}`,
     `핵심 제목: ${value("title")}`,
     `시즌 문맥: ${value("season")}`,
-    `상품 목록: ${productDrafts.map((product) => `${product.name} / ${product.price}`).join("\n")}`,
+    `상품 목록: ${productDrafts.map((product) => `${productDisplayName(product)} / ${product.price}`).join("\n")}`,
   ].join("\n");
 }
 
 function fallbackProductPoints() {
   productDrafts = productDrafts.map((product) => {
-    const name = product.name || "해당 상품";
+    const name = productDisplayName(product, "해당 상품");
     const priceLine = product.price ? `${product.price} 혜택으로 부담을 낮춰볼 수 있는 구성` : "행사 혜택과 함께 살펴보기 좋은 구성";
     return {
       ...product,
       points: product.points || [
         `${name}을 찾고 계셨던 분들께 추천드리기 좋은 상품입니다.`,
-        priceLine,
-        "영상 감상, 업무, 공간 활용 등 다양한 목적에 맞춰 활용하기 좋습니다.",
+        `${priceLine}이라 평소 가격 때문에 고민하셨던 분들도 비교해보기 좋습니다.`,
+        "게임, 영상 감상, 업무처럼 일상에서 자주 쓰는 환경을 두루 고려해볼 수 있습니다.",
+        "화면 크기와 사용 목적을 함께 생각하면 내 공간에 맞는 선택을 더 쉽게 할 수 있습니다.",
+        "라이브 혜택과 함께 확인하면 단순 가격 비교보다 실질적인 체감 혜택을 살펴보기 좋습니다.",
       ].join("\n"),
     };
   });
@@ -393,7 +685,8 @@ async function generateProductPoints() {
     return "Gemini API 키가 없어 기본 문장으로 상품 포인트를 채웠습니다.";
   }
 
-  const model = encodeURIComponent(value("model", "gemini-2.5-flash"));
+  const resolvedModel = await resolveGeminiModel();
+  const model = encodeURIComponent(resolvedModel);
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -446,7 +739,7 @@ async function generateProductPoints() {
   }));
   renderProductCards();
   syncProductsTextarea();
-  return "상품 특징/추천 포인트를 자동 생성했습니다.";
+  return `상품 특징/추천 포인트를 자동 생성했습니다. 사용 모델: ${resolvedModel}`;
 }
 
 function extractGeminiText(data) {
@@ -477,7 +770,8 @@ async function generateAutoFields(meta) {
     throw new Error("Gemini API 키를 입력해 주세요. 입력칸의 AIza...는 예시이며 실제 키를 붙여넣어야 합니다.");
   }
 
-  const model = encodeURIComponent(value("model", "gemini-2.5-flash"));
+  const resolvedModel = await resolveGeminiModel();
+  const model = encodeURIComponent(resolvedModel);
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
     method: "POST",
     headers: {
@@ -561,9 +855,13 @@ function makeIntro(meta) {
     "",
     summary,
     "",
+    "특히 모니터나 디스플레이 제품은 한 번 구매하면 오래 사용하는 제품이라 가격만 보고 고르기보다 화면 크기, 활용 목적, 혜택 조건을 함께 살펴보는 것이 중요합니다.",
+    "",
     `오늘은 ${brand}에서 준비한 ${meta.label} 소식을 자세히 정리해드리려고 합니다.`,
     "",
     meta.hook,
+    "",
+    "방송 전에 어떤 상품이 나오는지 미리 확인해두면 라이브가 시작됐을 때 훨씬 빠르게 비교하고 선택할 수 있어요.",
   ].join("\n");
 }
 
@@ -577,7 +875,14 @@ function makeSchedule(meta) {
 
   if (!lines.length) return "";
 
-  return [`${meta.scheduleTitle}`, "", ...lines].join("\n");
+  return [
+    `${meta.scheduleTitle}`,
+    "",
+    ...lines,
+    "",
+    "라이브 특가는 정해진 시간에 맞춰 혜택이 열리는 경우가 많기 때문에, 관심 있는 상품이 있다면 시작 전에 미리 알림을 설정해두는 편이 좋습니다.",
+    "방송 중에는 상품 설명과 이벤트 안내가 함께 진행될 수 있어 혜택 조건을 놓치지 않고 확인하는 것도 중요해요.",
+  ].join("\n");
 }
 
 function makeProducts(meta) {
@@ -592,7 +897,14 @@ function makeProducts(meta) {
   }
 
   if (benefits.length) {
-    blocks.push(`🎁 함께 챙기면 좋은 혜택\n\n${benefits.map((item) => `✔ ${item}`).join("\n")}`);
+    blocks.push([
+      "🎁 함께 챙기면 좋은 혜택",
+      "",
+      "이번 라이브는 상품 가격뿐 아니라 함께 제공되는 이벤트 혜택까지 같이 살펴보면 더 좋습니다.",
+      "구매 전에는 각 혜택의 참여 조건과 지급 기준을 한 번 더 확인해두시면 실제 체감 혜택을 계산하기 쉬워요.",
+      "",
+      benefits.map((item) => `✔ ${item}`).join("\n"),
+    ].join("\n"));
   }
 
   return blocks.join("\n\n");
@@ -602,7 +914,14 @@ function makeRecommend() {
   const recommend = listFromText(value("recommend"));
   if (!recommend.length) return "";
 
-  return [`💡 이런 분들께 추천드려요`, "", recommend.map((item) => `✔ ${item}`).join("\n")].join("\n");
+  return [
+    `💡 이런 분들께 추천드려요`,
+    "",
+    "아래에 해당되는 분들이라면 이번 라이브 구성을 한 번 체크해보셔도 좋겠습니다.",
+    "가격 혜택만 보는 것보다 내가 실제로 어떤 환경에서 사용할지 함께 떠올려보면 선택이 더 쉬워져요.",
+    "",
+    recommend.map((item) => `✔ ${item}`).join("\n"),
+  ].join("\n");
 }
 
 function makeClosing(meta) {
@@ -611,7 +930,11 @@ function makeClosing(meta) {
   const lines = [
     meta.close,
     "",
+    "라이브 상품은 방송 시간, 재고, 이벤트 조건에 따라 체감 혜택이 달라질 수 있으니 관심 상품이 있다면 미리 비교해두는 것을 추천드립니다.",
+    "",
     `특히 ${title}를 기다리셨던 분들이라면 이번 소식을 꼭 확인해보세요.`,
+    "",
+    "뽀리도 이번 구성은 일정과 혜택을 미리 확인해두고 보시면 훨씬 알차게 챙기실 수 있을 것 같아요.",
     "",
     "좋은 조건으로 필요한 제품과 혜택을 챙기실 수 있길 바랍니다 😊",
   ];
@@ -632,7 +955,49 @@ function composeDraft(meta) {
     makeClosing(meta),
   ].filter(Boolean);
 
-  fields.draft.value = sections.join("\n\n");
+  fields.draft.value = expandDraftToTargetLength(sections.join("\n\n"), meta);
+}
+
+function expandDraftToTargetLength(draft, meta) {
+  const targetMin = 2300;
+  if (draft.length >= targetMin) return draft;
+
+  const title = value("title", meta.headline);
+  const product = mainProductName();
+  const benefits = listFromText(value("benefits"));
+  const additions = [
+    [
+      "📌 구매 전 체크 포인트",
+      "",
+      `${product}처럼 사용 목적이 뚜렷한 제품은 단순히 가격만 비교하기보다 실제로 어떤 환경에서 사용할지 먼저 생각해보는 것이 좋습니다.`,
+      "책상 위 공간, 주로 즐기는 콘텐츠, 연결할 기기, 화면 크기 선호도까지 함께 보면 나에게 맞는 모델을 고르기가 훨씬 쉬워져요.",
+      "이번 라이브에서는 여러 모델을 한 번에 비교할 수 있으니, 방송 전에 관심 모델을 미리 정해두면 혜택 확인도 더 빠르게 할 수 있습니다.",
+    ].join("\n"),
+    [
+      "📌 라이브 혜택 확인 팁",
+      "",
+      benefits.length
+        ? `이번 혜택은 ${benefits[0]}처럼 함께 챙기면 좋은 이벤트가 포함되어 있어 구매 전 조건을 꼼꼼히 보는 것이 좋습니다.`
+        : "라이브 혜택은 방송 중 안내되는 조건에 따라 달라질 수 있어 구매 전 조건을 꼼꼼히 보는 것이 좋습니다.",
+      "특히 쿠폰, 포인트, 리뷰 이벤트처럼 각각 적용 기준이 다른 혜택은 최종 체감가를 계산할 때 차이가 생길 수 있습니다.",
+      "방송을 보면서 혜택 적용 순서와 참여 방법을 확인해두면 구매 후 놓치는 부분 없이 더 알차게 챙길 수 있어요.",
+    ].join("\n"),
+    [
+      "📌 이런 흐름으로 보면 좋아요",
+      "",
+      `먼저 ${title}의 라이브 일정과 시간을 확인하고, 그다음 상품 구성에서 내게 맞는 모델을 골라보세요.`,
+      "마지막으로 혜택과 이벤트 조건을 체크하면 방송 시간 안에 조금 더 여유 있게 선택할 수 있습니다.",
+      "관심 상품이 여러 개라면 모델명과 가격을 미리 메모해두고 비교해보는 것도 좋은 방법입니다.",
+    ].join("\n"),
+  ];
+
+  let result = draft;
+  for (const addition of additions) {
+    if (result.length >= targetMin) break;
+    result += `\n\n${addition}`;
+  }
+
+  return result;
 }
 
 async function generateDraft() {
@@ -687,6 +1052,7 @@ function saveState() {
     return memo;
   }, {});
   data.apiCollapsed = apiBox.classList.contains("saved");
+  data.modelOptions = modelOptions;
   localStorage.setItem("blogDraftGenerator", JSON.stringify(data));
 }
 
@@ -699,6 +1065,9 @@ function restoreState() {
     Object.entries(data).forEach(([key, val]) => {
       if (fields[key]) fields[key].value = val;
     });
+    if (Array.isArray(data.modelOptions)) {
+      modelOptions = data.modelOptions.map((item) => String(item).trim()).filter(Boolean);
+    }
     updateApiBoxState(Boolean(data.apiCollapsed));
   } catch {
     localStorage.removeItem("blogDraftGenerator");
@@ -706,6 +1075,8 @@ function restoreState() {
 }
 
 generateButton.addEventListener("click", generateDraft);
+
+loadModelSheetButton.addEventListener("click", loadModelOptionsFromSheet);
 
 addProductButton.addEventListener("click", () => {
   productDrafts.push(createProductDraft());
@@ -748,6 +1119,22 @@ productCards.addEventListener("input", (event) => {
   if (!product) return;
 
   product.name = card.querySelector(".product-name").value;
+  product.model = card.querySelector(".product-model").value;
+  product.price = card.querySelector(".product-price").value;
+  product.points = card.querySelector(".product-points").value;
+  syncProductsTextarea();
+  saveState();
+});
+
+productCards.addEventListener("change", (event) => {
+  const card = event.target.closest(".product-card");
+  if (!card) return;
+
+  const product = productDrafts.find((item) => item.id === card.dataset.id);
+  if (!product) return;
+
+  product.name = card.querySelector(".product-name").value;
+  product.model = card.querySelector(".product-model").value;
   product.price = card.querySelector(".product-price").value;
   product.points = card.querySelector(".product-points").value;
   syncProductsTextarea();
@@ -778,7 +1165,7 @@ fields.date.addEventListener("input", () => {
 
 document.querySelector("#clear").addEventListener("click", () => {
   Object.keys(fields).forEach((key) => {
-    if (key === "apiKey" || key === "model") return;
+    if (key === "apiKey" || key === "model" || key === "modelSheetUrl") return;
     const field = fields[key];
     if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
       field.value = "";
@@ -797,6 +1184,7 @@ document.querySelector("#clear").addEventListener("click", () => {
 
 saveApiKeyButton.addEventListener("click", (event) => {
   event.stopPropagation();
+  resolvedModelCache = { apiKey: "", selection: "", model: "" };
   saveState();
   updateApiBoxState(true);
   fields.status.textContent = "API 키를 이 브라우저에 저장했습니다.";
@@ -846,6 +1234,9 @@ document.querySelector("#download").addEventListener("click", () => {
 Object.values(fields).forEach((field) => {
   if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
     field.addEventListener("input", () => {
+      if (field === fields.apiKey || field === fields.model) {
+        resolvedModelCache = { apiKey: "", selection: "", model: "" };
+      }
       saveState();
       if (field === fields.apiKey) updateApiBoxState(false);
     });
@@ -853,12 +1244,28 @@ Object.values(fields).forEach((field) => {
 });
 
 restoreState();
+if (!fields.modelSheetUrl.value.trim()) {
+  fields.modelSheetUrl.value = defaultModelSheetUrl;
+  saveState();
+}
+if (!localStorage.getItem("blogDraftGeneratorModelAutoMigrated")) {
+  if (
+    fields.model.value === "gemini-2.0-flash" ||
+    fields.model.value === "gemini-2.0-flash-lite" ||
+    fields.model.value === "gemini-2.5-flash" ||
+    fields.model.value === "gemini-2.5-flash-lite"
+  ) {
+    fields.model.value = "auto";
+    saveState();
+  }
+  localStorage.setItem("blogDraftGeneratorModelAutoMigrated", "true");
+}
 if (fields.postType.value !== "live") {
   fields.postType.value = "live";
   saveState();
 }
-if (fields.model.value === "gemini-2.0-flash" || fields.model.value === "gemini-2.0-flash-lite") {
-  fields.model.value = "gemini-2.5-flash";
+if (!fields.model.value) {
+  fields.model.value = "auto";
   saveState();
 }
 applyFormPreset();

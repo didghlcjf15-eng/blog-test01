@@ -195,7 +195,8 @@ h2 {
 }
 
 .api-box.saved .api-copy p,
-.api-box.saved .api-fields {
+.api-box.saved .api-fields,
+.api-box.saved .model-source {
   display: none;
 }
 
@@ -220,8 +221,21 @@ h2 {
   gap: 12px;
 }
 
-.api-fields .field {
+.api-fields .field,
+.model-source .field {
   margin-bottom: 0;
+}
+
+.model-source {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.model-source button {
+  white-space: nowrap;
 }
 
 .api-copy {
@@ -598,6 +612,7 @@ button:disabled {
   .two,
   .three,
   .api-fields,
+  .model-source,
   .meta-output {
     grid-template-columns: 1fr;
   }

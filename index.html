@@ -22,23 +22,33 @@
           <p>API 키 발급: <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer">aistudio.google.com</a> → Get API key → Create API key</p>
           <p>무료 플랜은 Flash 계열 기준 분당 15회 생성으로 시작하기 좋습니다.</p>
         </div>
-        <div class="api-fields">
-          <div class="field">
-            <label for="apiKey">Gemini API 키</label>
-            <input id="apiKey" type="password" autocomplete="off" placeholder="AIza...">
-          </div>
+      <div class="api-fields">
+        <div class="field">
+          <label for="apiKey">Gemini API 키</label>
+          <input id="apiKey" type="password" autocomplete="off" placeholder="AIza...">
+        </div>
           <div class="field">
             <label for="model">모델</label>
             <select id="model">
-              <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+              <option value="auto">자동 선택: 최신 Flash Lite</option>
+              <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
+              <option value="gemini-3.1-flash">gemini-3.1-flash</option>
               <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
-            </select>
-          </div>
+              <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+          </select>
         </div>
-        <div class="api-actions">
-          <button id="saveApiKey" type="button">API 키 저장</button>
-          <span id="apiSavedText">저장 전</span>
+      </div>
+      <div class="model-source">
+        <div class="field">
+          <label for="modelSheetUrl">모델명 목록 구글시트</label>
+          <input id="modelSheetUrl" value="https://docs.google.com/spreadsheets/d/15Fdqhj7bayYRKLNNUgvQGPkmVCHL7xuUrBSXUnEAi2Y/edit?gid=617307473#gid=617307473" placeholder="PVI자료 시트가 있는 구글스프레드시트 링크">
         </div>
+        <button id="loadModelSheet" type="button">목록 불러오기</button>
+      </div>
+      <div class="api-actions">
+        <button id="saveApiKey" type="button">API 키 저장</button>
+        <span id="apiSavedText">저장 전</span>
+      </div>
       </div>
 
       <input id="postType" type="hidden" value="live">
@@ -106,7 +116,7 @@
               <span>03</span>
               <div>
                 <strong id="productSectionLabel">상품 구성</strong>
-                <p>상품명과 가격만 적어도 추천 포인트는 자동으로 채웁니다.</p>
+                <p>상품명, 모델명, 가격만 적어도 추천 포인트는 자동으로 채웁니다.</p>
               </div>
             </div>
             <div class="actions compact">
@@ -117,7 +127,7 @@
           <div id="productCards" class="product-cards" aria-label="상품 입력 목록"></div>
           <details class="raw-products">
             <summary>직접 입력으로 수정</summary>
-            <textarea id="products" rows="5" placeholder="한 줄에 하나씩 입력하세요. 예: 오디세이 G8 LS27HG806 | 최종체감가 946,148원 | 27형 고해상도 게이밍 모니터"></textarea>
+            <textarea id="products" rows="5" placeholder="한 줄에 하나씩 입력하세요. 예: 오디세이 G8 | LS27HG806 | 최종체감가 946,148원 | 27형 고해상도 게이밍 모니터"></textarea>
           </details>
         </div>
 
