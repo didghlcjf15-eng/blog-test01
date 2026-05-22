@@ -321,9 +321,38 @@ textarea {
 }
 
 .section-head button,
-.remove-product {
+.remove-product,
+.file-button {
   min-height: 36px;
   padding: 0 12px;
+}
+
+.file-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.file-button:hover {
+  border-color: var(--accent);
+  box-shadow: 0 6px 16px rgba(15, 118, 110, 0.11);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 
 .product-cards {

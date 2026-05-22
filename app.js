@@ -24,6 +24,7 @@ const fields = {
 const generateButton = document.querySelector("#generate");
 const addProductButton = document.querySelector("#addProduct");
 const fillProductPointsButton = document.querySelector("#fillProductPoints");
+const excelProductFile = document.querySelector("#excelProductFile");
 const productCards = document.querySelector("#productCards");
 const apiBox = document.querySelector("#apiBox");
 const saveApiKeyButton = document.querySelector("#saveApiKey");
@@ -239,6 +240,132 @@ function setProductsFromText(text) {
   }
   renderProductCards();
   syncProductsTextarea();
+}
+
+function sheetCell(sheet, address) {
+  const value = sheet[address]?.v;
+  return value == null ? "" : String(value).trim();
+}
+
+function normalizeExcelText(text) {
+  return String(text || "")
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+function splitExcelSchedule(text) {
+  const normalized = normalizeExcelText(text);
+  const dateMatch = normalized.match(/\d{2,4}\s*[./년-]\s*\d{1,2}\s*[./월-]\s*\d{1,2}|\d{1,2}\s*월\s*\d{1,2}\s*일/);
+  const timeMatch = normalized.match(/\d{1,2}\s*:\s*\d{2}\s*~\s*\d{1,2}\s*:\s*\d{2}|\d{1,2}\s*시\s*~\s*\d{1,2}\s*시/);
+  return {
+    date: dateMatch ? dateMatch[0].replace(/\s+/g, "") : "",
+    time: timeMatch ? timeMatch[0].replace(/\s+/g, "") : "",
+  };
+}
+
+function formatWon(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return "";
+  return `${Math.round(number).toLocaleString("ko-KR")}원`;
+}
+
+function isProductNumber(value) {
+  return /^\d{8,}$/.test(String(value || "").trim());
+}
+
+function modelFromExcelName(name) {
+  const normalized = String(name || "").trim();
+  const codeMatch = normalized.match(/[A-Z]{1,4}\d{2}[A-Z0-9]{2,}[A-Z0-9]*KR|[A-Z]{1,4}\d{2,3}[A-Z]{2,}\d*/i);
+  return codeMatch ? codeMatch[0].trim() : "";
+}
+
+function productNameFromModel(model, rawName = "") {
+  const text = String(model || "").toUpperCase();
+  const raw = String(rawName || "").trim();
+  if (text.includes("HG806")) return "오디세이 G8";
+  if (text.includes("DG930")) return "오디세이 G9";
+  if (text.includes("BEF")) return "비즈니스 TV";
+  if (text.includes("FG500")) return "오디세이 G5";
+  if (text.includes("M50")) return "스마트 모니터";
+  return raw.replace(model, "").trim() || raw || "상품";
+}
+
+function excelProductPoint(rawName) {
+  const raw = String(rawName || "");
+  if (raw.includes("패키지")) return "라이브 혜택과 함께 구성품까지 한 번에 살펴보기 좋은 패키지 상품";
+  if (raw.includes("오디세이") || /G[589]/i.test(raw)) return "게이밍과 영상 감상 용도로 가격 혜택을 함께 비교해보기 좋은 상품";
+  return "라이브 혜택과 함께 가격과 활용도를 비교해보기 좋은 상품";
+}
+
+function extractProductsFromWorkbook(workbook) {
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+  const products = [];
+
+  for (let row = range.s.r; row <= range.e.r; row += 1) {
+    const excelRow = row + 1;
+    const productNumber = sheetCell(sheet, `Z${excelRow}`);
+    const rawName = sheetCell(sheet, `AA${excelRow}`);
+    if (!isProductNumber(productNumber) || !rawName) continue;
+
+    const model = modelFromExcelName(rawName) || rawName;
+    const name = productNameFromModel(model, rawName);
+    const finalPrice = formatWon(sheetCell(sheet, `AZ${excelRow}`));
+    const displayPrice = formatWon(sheetCell(sheet, `AC${excelRow}`));
+    const price = finalPrice ? `최종체감가 ${finalPrice}` : displayPrice ? `노출가 ${displayPrice}` : "";
+
+    products.push(createProductDraft(name, model, price, excelProductPoint(rawName)));
+  }
+
+  return products.slice(0, 8);
+}
+
+function extractScheduleFromWorkbook(workbook) {
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  return splitExcelSchedule(sheetCell(sheet, "E13"));
+}
+
+function extractTitleFromWorkbook(workbook) {
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  return normalizeExcelText(sheetCell(sheet, "B13"));
+}
+
+async function importProductsFromExcel(file) {
+  if (!window.XLSX) {
+    fields.status.textContent = "엑셀 읽기 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.";
+    return;
+  }
+
+  showLoading("엑셀 읽는 중", "디자인요청서에서 모델명과 최종체감가를 추출하고 있습니다.");
+  try {
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: "array" });
+    const importedProducts = extractProductsFromWorkbook(workbook);
+    const schedule = extractScheduleFromWorkbook(workbook);
+    const title = extractTitleFromWorkbook(workbook);
+    if (!importedProducts.length) {
+      fields.status.textContent = "엑셀에서 상품 정보를 찾지 못했습니다. 상품번호, 상품명, 최종체감가 열이 있는 디자인요청서인지 확인해 주세요.";
+      return;
+    }
+
+    if (title) fields.title.value = title;
+    if (schedule.date) fields.date.value = schedule.date;
+    if (schedule.time) fields.time.value = schedule.time;
+    inferSeasonContext();
+    productDrafts = importedProducts;
+    renderProductCards();
+    syncProductsTextarea();
+    saveState();
+    fields.status.textContent = `엑셀에서 상품 ${importedProducts.length}개와 라이브 일정/시간을 불러왔습니다.`;
+  } catch (error) {
+    fields.status.textContent = "엑셀 파일을 읽지 못했습니다. .xlsx 디자인요청서 파일인지 확인해 주세요.";
+  } finally {
+    hideLoading();
+    excelProductFile.value = "";
+  }
 }
 
 function value(key, fallback = "") {
@@ -522,8 +649,9 @@ async function loadModelOptionsFromSheet() {
 
 function updateApiBoxState(collapsed = false) {
   const hasKey = Boolean(value("apiKey"));
-  apiBox.classList.toggle("saved", collapsed && hasKey);
-  apiSavedText.textContent = hasKey ? "저장됨" : "저장 전";
+  const hasSheetUrl = Boolean(value("modelSheetUrl"));
+  apiBox.classList.toggle("saved", collapsed && (hasKey || hasSheetUrl));
+  apiSavedText.textContent = hasKey || hasSheetUrl ? "설정 저장됨" : "저장 전";
 }
 
 function listFromText(text) {
@@ -1078,6 +1206,12 @@ generateButton.addEventListener("click", generateDraft);
 
 loadModelSheetButton.addEventListener("click", loadModelOptionsFromSheet);
 
+excelProductFile.addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  await importProductsFromExcel(file);
+});
+
 addProductButton.addEventListener("click", () => {
   productDrafts.push(createProductDraft());
   renderProductCards();
@@ -1187,7 +1321,7 @@ saveApiKeyButton.addEventListener("click", (event) => {
   resolvedModelCache = { apiKey: "", selection: "", model: "" };
   saveState();
   updateApiBoxState(true);
-  fields.status.textContent = "API 키를 이 브라우저에 저장했습니다.";
+  fields.status.textContent = "API 키와 구글시트 링크 설정을 이 브라우저에 저장했습니다.";
 });
 
 apiBox.addEventListener("click", () => {
@@ -1238,7 +1372,7 @@ Object.values(fields).forEach((field) => {
         resolvedModelCache = { apiKey: "", selection: "", model: "" };
       }
       saveState();
-      if (field === fields.apiKey) updateApiBoxState(false);
+      if (field === fields.apiKey || field === fields.modelSheetUrl) updateApiBoxState(false);
     });
   }
 });
@@ -1277,3 +1411,9 @@ if (!fields.title.value.trim()) {
   fields.status.textContent = "예시가 준비되었습니다. API 키를 입력한 뒤 초안 만들기를 눌러주세요.";
 }
 setProductsFromText(fields.products.value);
+if (localStorage.getItem("blogDraftGeneratorAutoGenerate") === "true") {
+  localStorage.removeItem("blogDraftGeneratorAutoGenerate");
+  window.setTimeout(() => {
+    generateDraft();
+  }, 300);
+}
