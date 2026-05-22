@@ -644,7 +644,7 @@ button.help-tip:focus {
 
 .output {
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto auto auto 1fr auto;
   min-height: 640px;
   background: #f7f8f5;
 }
@@ -680,6 +680,30 @@ button.help-tip:focus {
   min-height: 74px;
   resize: vertical;
   background: #ffffff;
+}
+
+.revision-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 0 24px 14px;
+  border-bottom: 1px solid var(--line);
+  background: #f7f8f5;
+}
+
+.revision-box .field {
+  margin-bottom: 0;
+}
+
+.revision-box textarea {
+  min-height: 58px;
+  resize: vertical;
+  background: #ffffff;
+}
+
+.revision-box button {
+  min-height: 58px;
 }
 
 #draft {
@@ -805,7 +829,8 @@ button.help-tip:focus {
   .three,
   .api-fields,
   .model-source,
-  .meta-output {
+  .meta-output,
+  .revision-box {
     grid-template-columns: 1fr;
   }
 

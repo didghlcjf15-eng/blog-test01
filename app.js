@@ -17,11 +17,13 @@ const fields = {
   tone: document.querySelector("#tone"),
   postTitles: document.querySelector("#postTitles"),
   hashtags: document.querySelector("#hashtags"),
+  editPrompt: document.querySelector("#editPrompt"),
   draft: document.querySelector("#draft"),
   status: document.querySelector("#status"),
 };
 
 const generateButton = document.querySelector("#generate");
+const reviseDraftButton = document.querySelector("#reviseDraft");
 const addProductButton = document.querySelector("#addProduct");
 const fillProductPointsButton = document.querySelector("#fillProductPoints");
 const excelProductFile = document.querySelector("#excelProductFile");
@@ -1088,6 +1090,140 @@ function composeDraft(meta) {
   fields.draft.value = expandDraftToTargetLength(sections.join("\n\n"), meta);
 }
 
+function restoreDraftLineBreaks(text) {
+  let result = String(text || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  const lineBreaks = (result.match(/\n/g) || []).length;
+  if (lineBreaks >= 10) return result;
+
+  result = result
+    .replace(/\s+(안녕하세요[,.]?)/g, "\n\n$1")
+    .replace(/\s+(📢\s*)/g, "\n\n$1")
+    .replace(/\s+(📺\s*)/g, "\n\n$1")
+    .replace(/\s+(🎁\s*)/g, "\n\n$1")
+    .replace(/\s+(💡\s*)/g, "\n\n$1")
+    .replace(/\s+([1-9]️⃣\s+)/g, "\n\n$1")
+    .replace(/\s+(👉\s*)/g, "\n$1")
+    .replace(/\s+(✔\s*)/g, "\n$1")
+    .replace(/\s+(바로가기 링크[▼:]*)/g, "\n\n$1")
+    .replace(/\s+(https?:\/\/\S+)/g, "\n$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return result;
+}
+
+function buildRevisionPrompt(instruction) {
+  return [
+    "아래는 네이버 블로그 포스팅 초안입니다.",
+    "사용자의 수정 요청을 반영해서 제목 후보, 해시태그, 본문을 다시 다듬어 주세요.",
+    "",
+    "규칙:",
+    "- 상품명, 모델명, 가격, 일정, 시간, 혜택, 링크처럼 입력된 사실은 바꾸지 마세요.",
+    "- 숫자 이모티콘은 상품명 앞에만 사용하세요.",
+    "- 기존 톤은 유지하되 사용자의 수정 요청을 우선 반영하세요.",
+    "- 본문은 2,300~2,700자 내외의 블로그 원고 형태로 작성하세요.",
+    "- 현재 본문의 줄바꿈 구조를 반드시 유지하세요.",
+    "- 제목, 인사말, 섹션 제목, 일정, 각 상품, 가격, 추천 문장, 혜택, 링크는 각각 줄을 나누세요.",
+    "- draft 값 안에는 실제 줄바꿈 문자(\\n)를 넣어 주세요. 절대 한 문단의 줄글로 합치지 마세요.",
+    "- 상품 구성은 반드시 아래 형식을 유지하세요: 1️⃣ 상품명 모델명\\n👉 최종체감가 ...\\n✔ 추천 문장",
+    "- 출력은 JSON만 반환하세요.",
+    "",
+    `수정 요청: ${instruction}`,
+    "",
+    `현재 제목 후보:\n${value("postTitles", "없음")}`,
+    "",
+    `현재 해시태그:\n${value("hashtags", "없음")}`,
+    "",
+    `현재 본문:\n${value("draft")}`,
+  ].join("\n");
+}
+
+async function reviseGeneratedDraft() {
+  const instruction = value("editPrompt");
+  if (!fields.draft.value.trim()) {
+    fields.status.textContent = "먼저 초안을 만들어 주세요.";
+    return;
+  }
+  if (!instruction) {
+    fields.status.textContent = "수정 요청을 입력해 주세요.";
+    fields.editPrompt.focus();
+    return;
+  }
+  if (!value("apiKey")) {
+    fields.status.textContent = "수정 요청을 적용하려면 Gemini API 키가 필요합니다.";
+    return;
+  }
+
+  reviseDraftButton.disabled = true;
+  generateButton.disabled = true;
+  fields.status.textContent = "수정 요청을 반영하는 중입니다.";
+  showLoading("원고 수정 중", "입력한 요청에 맞춰 제목, 해시태그, 본문을 다듬고 있습니다.");
+
+  try {
+    const resolvedModel = await resolveGeminiModel();
+    const model = encodeURIComponent(resolvedModel);
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(value("apiKey"))}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: buildRevisionPrompt(instruction) }] }],
+        generationConfig: {
+          temperature: 0.55,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              titles: {
+                type: "ARRAY",
+                items: { type: "STRING" },
+              },
+              hashtags: { type: "STRING" },
+              draft: { type: "STRING" },
+            },
+            required: ["titles", "hashtags", "draft"],
+          },
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      let detail = "";
+      try {
+        const errorData = await response.json();
+        detail = errorData.error?.message || JSON.stringify(errorData.error || errorData);
+      } catch {
+        detail = await response.text();
+      }
+      const error = new Error(detail);
+      error.isQuotaError = response.status === 429 || /quota|rate|exceeded/i.test(detail);
+      throw error;
+    }
+
+    const data = await response.json();
+    const revised = parseGeneratedText(extractGeminiText(data));
+    fields.postTitles.value = Array.isArray(revised.titles)
+      ? revised.titles.map((item) => String(item).trim()).filter(Boolean).join("\n")
+      : fields.postTitles.value;
+    fields.hashtags.value = String(revised.hashtags || fields.hashtags.value).trim();
+    fields.draft.value = restoreDraftLineBreaks(revised.draft || fields.draft.value);
+    fields.status.textContent = `수정 요청을 반영했습니다. 사용 모델: ${resolvedModel}`;
+    saveState();
+  } catch (error) {
+    fields.status.textContent = error.isQuotaError
+      ? "Gemini 무료 사용량 제한에 걸려 수정 요청을 적용하지 못했습니다. 잠시 후 다시 시도해 주세요."
+      : `수정 요청 적용에 실패했습니다. ${error.message.slice(0, 160)}`;
+  } finally {
+    reviseDraftButton.disabled = false;
+    generateButton.disabled = false;
+    hideLoading();
+  }
+}
+
 function expandDraftToTargetLength(draft, meta) {
   const targetMin = 2300;
   if (draft.length >= targetMin) return draft;
@@ -1133,6 +1269,7 @@ function expandDraftToTargetLength(draft, meta) {
 async function generateDraft() {
   const meta = typeMeta[value("postType", "live")];
   generateButton.disabled = true;
+  reviseDraftButton.disabled = true;
   fillProductPointsButton.disabled = true;
   inferSeasonContext();
   fields.status.textContent = "Gemini API로 상품 포인트와 도입 문장, 추천 대상을 생성하는 중입니다.";
@@ -1164,6 +1301,7 @@ async function generateDraft() {
     fields.status.textContent = message;
   } finally {
     generateButton.disabled = false;
+    reviseDraftButton.disabled = false;
     fillProductPointsButton.disabled = false;
     hideLoading();
   }
@@ -1205,6 +1343,7 @@ function restoreState() {
 }
 
 generateButton.addEventListener("click", generateDraft);
+reviseDraftButton.addEventListener("click", reviseGeneratedDraft);
 
 loadModelSheetButton.addEventListener("click", loadModelOptionsFromSheet);
 
