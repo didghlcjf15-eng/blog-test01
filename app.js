@@ -64,7 +64,7 @@ const formPresets = {
     timePlaceholder: "예: 13시 ~ 14시",
     showSchedule: true,
     showProducts: true,
-    productLabel: "라이브 상품 구성",
+    productLabel: "상품구성",
     benefitsLabel: "라이브 혜택/이벤트",
     benefitsPlaceholder: "예: 소통 이벤트 네이버페이 5천원 / 구매인증 이벤트 네이버페이 1만원 / 상품평 이벤트 최대 3만원",
     linkLabel: "라이브/상품 링크",
@@ -199,7 +199,9 @@ function renderProductCards() {
     card.innerHTML = `
       <div class="product-card-head">
         <span class="product-card-title">상품 ${index + 1}</span>
-        <button class="remove-product" type="button">삭제</button>
+        <button class="remove-product icon-only" type="button" aria-label="상품 삭제" title="상품 삭제">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 15H6L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
+        </button>
       </div>
       <div class="grid two product-identity">
         <div class="field">
@@ -359,7 +361,7 @@ async function importProductsFromExcel(file) {
     renderProductCards();
     syncProductsTextarea();
     saveState();
-    fields.status.textContent = `엑셀에서 상품 ${importedProducts.length}개와 라이브 일정/시간을 불러왔습니다.`;
+    fields.status.textContent = `엑셀에서 행사명, 라이브 일정/시간, 상품 ${importedProducts.length}개를 불러왔습니다.`;
   } catch (error) {
     fields.status.textContent = "엑셀 파일을 읽지 못했습니다. .xlsx 디자인요청서 파일인지 확인해 주세요.";
   } finally {
@@ -1276,9 +1278,10 @@ productCards.addEventListener("change", (event) => {
 });
 
 productCards.addEventListener("click", (event) => {
-  if (!event.target.classList.contains("remove-product")) return;
+  const removeButton = event.target.closest(".remove-product");
+  if (!removeButton) return;
 
-  const card = event.target.closest(".product-card");
+  const card = removeButton.closest(".product-card");
   productDrafts = productDrafts.filter((item) => item.id !== card.dataset.id);
   if (!productDrafts.length) productDrafts = [createProductDraft()];
   renderProductCards();

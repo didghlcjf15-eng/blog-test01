@@ -20,12 +20,12 @@
 
 html {
   scrollbar-width: thin;
-  scrollbar-color: #aab3b0 transparent;
+  scrollbar-color: #c5cbc8 transparent;
 }
 
 *::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 4px;
+  height: 4px;
 }
 
 *::-webkit-scrollbar-track {
@@ -33,16 +33,17 @@ html {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: #aab3b0;
-  border: 2px solid transparent;
+  background: #c5cbc8;
+  border: 0;
   border-radius: 999px;
-  background-clip: content-box;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: #8f9a96;
-  border: 2px solid transparent;
-  background-clip: content-box;
+  background: #aeb6b2;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 body {
@@ -89,6 +90,9 @@ textarea {
 }
 
 .brand {
+  position: sticky;
+  top: -22px;
+  z-index: 8;
   margin: -22px -22px 18px;
   padding: 24px 24px 22px;
   border-bottom: 1px solid var(--line);
@@ -140,13 +144,17 @@ h2 {
   background: rgba(247, 248, 245, 0.72);
 }
 
+.import-section {
+  background: #ffffff;
+}
+
 .section-title {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 11px;
 }
 
-.section-title span {
+.section-title > span {
   display: inline-grid;
   place-items: center;
   flex: 0 0 30px;
@@ -160,16 +168,21 @@ h2 {
 }
 
 .section-title strong {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   color: var(--ink);
-  font-size: 15px;
+  font-size: 16px;
+  line-height: 1.25;
+  word-break: keep-all;
 }
 
-.section-title p {
-  margin: 4px 0 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.45;
+#productSectionLabel {
+  display: inline;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
 }
 
 .api-box {
@@ -239,8 +252,9 @@ h2 {
 }
 
 .api-copy {
-  display: grid;
-  gap: 5px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
   color: #4d463a;
   font-size: 13px;
   line-height: 1.45;
@@ -276,6 +290,64 @@ label {
   color: #344054;
   font-size: 13px;
   font-weight: 700;
+}
+
+.help-tip {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--muted);
+  padding: 0;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: none;
+  transform: none;
+}
+
+.help-tip:hover,
+.help-tip:focus {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  box-shadow: 0 0 0 4px var(--focus);
+  transform: none;
+}
+
+.help-tip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  width: min(280px, 72vw);
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: var(--small-shadow);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 4px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.help-tip:hover::after,
+.help-tip:focus::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 input,
@@ -314,6 +386,7 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+  flex-wrap: wrap;
 }
 
 .section-head label {
@@ -325,6 +398,40 @@ textarea {
 .file-button {
   min-height: 36px;
   padding: 0 12px;
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-only {
+  width: 42px;
+  min-width: 42px;
+  padding: 0;
+  gap: 0;
+}
+
+.section-head .icon-only,
+.api-actions .icon-only,
+.model-source .icon-only,
+.actions .icon-only {
+  width: 38px;
+  min-width: 38px;
+}
+
+.form-actions .icon-only {
+  width: 54px;
+  min-width: 54px;
+}
+
+.form-actions .primary.icon-only {
+  flex: 1 1 220px;
 }
 
 .file-button {
@@ -344,6 +451,18 @@ textarea {
 .file-button:hover {
   border-color: var(--accent);
   box-shadow: 0 6px 16px rgba(15, 118, 110, 0.11);
+}
+
+.file-button.primary-file {
+  min-height: 40px;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.file-button.primary-file:hover {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
 }
 
 .visually-hidden {
@@ -447,6 +566,9 @@ textarea:focus {
 }
 
 button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 42px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -456,6 +578,33 @@ button {
   cursor: pointer;
   font-weight: 700;
   transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+
+button.icon-only,
+.file-button.icon-only {
+  width: 42px;
+  min-width: 42px;
+  padding: 0;
+}
+
+.section-head button.icon-only,
+.section-head .file-button.icon-only,
+.api-actions button.icon-only,
+.model-source button.icon-only,
+.actions button.icon-only {
+  width: 38px;
+  min-width: 38px;
+}
+
+.form-actions button.icon-only {
+  width: 54px;
+  min-width: 54px;
+}
+
+.hidden-field,
+button.hidden-field,
+.file-button.hidden-field {
+  display: none;
 }
 
 button:hover {
@@ -478,6 +627,19 @@ button.primary:hover {
 button:disabled {
   cursor: wait;
   opacity: 0.68;
+}
+
+button.help-tip {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+button.help-tip:hover,
+button.help-tip:focus {
+  transform: none;
 }
 
 .output {
@@ -630,6 +792,7 @@ button:disabled {
   }
 
   .brand {
+    top: -16px;
     margin: -16px -16px 18px;
     padding: 18px 16px;
   }

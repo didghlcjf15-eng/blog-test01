@@ -16,11 +16,8 @@
 
       <div id="apiBox" class="api-box">
         <div class="api-copy">
-          <strong>🔑 Gemini API 키 설정</strong>
-          <p>Google AI Studio에서 발급한 API 키를 입력하세요.</p>
-          <p>키는 이 브라우저에만 저장되며, 초안 생성 시 Google Gemini API 호출에만 사용됩니다.</p>
-          <p>API 키 발급: <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer">aistudio.google.com</a> → Get API key → Create API key</p>
-          <p>무료 플랜은 Flash 계열 기준 분당 15회 생성으로 시작하기 좋습니다.</p>
+          <strong>Gemini API 키 설정</strong>
+          <button class="help-tip" type="button" aria-label="API 키 설정 도움말" data-tooltip="Google AI Studio에서 발급한 API 키를 입력하세요. 키는 이 브라우저에만 저장되며 초안 생성 시 Gemini API 호출에만 사용됩니다.">?</button>
         </div>
       <div class="api-fields">
         <div class="field">
@@ -43,10 +40,14 @@
           <label for="modelSheetUrl">모델명 목록 구글시트</label>
           <input id="modelSheetUrl" type="password" autocomplete="off" placeholder="PVI자료 시트가 있는 구글스프레드시트 링크">
         </div>
-        <button id="loadModelSheet" type="button">목록 불러오기</button>
+        <button id="loadModelSheet" class="icon-only" type="button" aria-label="모델명 목록 불러오기" title="모델명 목록 불러오기">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3Z"></path><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6"></path><path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"></path></svg>
+        </button>
       </div>
       <div class="api-actions">
-        <button id="saveApiKey" type="button">API 키 저장</button>
+        <button id="saveApiKey" class="icon-only" type="button" aria-label="API 키 저장" title="API 키 저장">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l2 2v16H5Z"></path><path d="M8 3v6h8V3"></path><path d="M8 21v-7h8v7"></path></svg>
+        </button>
         <span id="apiSavedText">저장 전</span>
       </div>
       </div>
@@ -54,12 +55,26 @@
       <input id="postType" type="hidden" value="live">
 
       <div class="form-stack">
+        <div class="form-section import-section">
+          <div class="section-head">
+            <div class="section-title">
+              <span>01</span>
+              <div>
+                <strong>엑셀 불러오기 <button class="help-tip" type="button" aria-label="엑셀 불러오기 도움말" data-tooltip="디자인요청서 엑셀을 업로드하면 행사명, 라이브 일정/시간, 모델명, 최종체감가를 자동으로 채웁니다.">?</button></strong>
+              </div>
+            </div>
+            <label class="file-button primary-file icon-only" for="excelProductFile" aria-label="엑셀에서 불러오기" title="엑셀에서 불러오기">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"></path><path d="m7 8 5-5 5 5"></path><path d="M5 15v4h14v-4"></path></svg>
+            </label>
+            <input id="excelProductFile" class="visually-hidden" type="file" accept=".xlsx,.xls">
+          </div>
+        </div>
+
         <div class="form-section">
           <div class="section-title">
-            <span>01</span>
+            <span>02</span>
             <div>
-              <strong>기본 정보</strong>
-              <p>포스팅의 중심이 되는 제목과 브랜드를 입력하세요.</p>
+              <strong>기본 정보 <button class="help-tip" type="button" aria-label="기본 정보 도움말" data-tooltip="포스팅의 중심이 되는 행사명, 화자, 브랜드 정보를 입력합니다.">?</button></strong>
             </div>
           </div>
           <div class="grid two">
@@ -92,10 +107,9 @@
 
         <div class="form-section">
           <div class="section-title">
-            <span>02</span>
+            <span>03</span>
             <div>
-              <strong>라이브 일정</strong>
-              <p>입력한 날짜에 맞춰 시즌 문맥은 자동으로 잡습니다.</p>
+              <strong>라이브 일정 <button class="help-tip" type="button" aria-label="라이브 일정 도움말" data-tooltip="엑셀 업로드 시 일정과 시간이 자동 입력되며, 날짜에 맞춰 시즌 문맥도 자동 설정됩니다.">?</button></strong>
             </div>
           </div>
           <div class="grid two">
@@ -113,17 +127,18 @@
         <div id="productSection" class="form-section product-section">
           <div class="section-head">
             <div class="section-title">
-              <span>03</span>
+              <span>04</span>
               <div>
-                <strong id="productSectionLabel">상품 구성</strong>
-                <p>상품명, 모델명, 가격만 적어도 추천 포인트는 자동으로 채웁니다.</p>
+                <strong><span id="productSectionLabel">상품구성</span> <button class="help-tip" type="button" aria-label="상품구성 도움말" data-tooltip="상품명, 모델명, 가격을 입력하거나 엑셀에서 불러오면 추천 포인트는 초안 생성 시 자동 작성됩니다.">?</button></strong>
               </div>
             </div>
             <div class="actions compact">
-              <label class="file-button" for="excelProductFile">엑셀에서 불러오기</label>
-              <input id="excelProductFile" class="visually-hidden" type="file" accept=".xlsx,.xls">
-              <button id="fillProductPoints" class="hidden-field" type="button">포인트 자동 생성</button>
-              <button id="addProduct" type="button">상품 추가</button>
+              <button id="fillProductPoints" class="hidden-field icon-only" type="button" aria-label="포인트 자동 생성" title="포인트 자동 생성">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 10.6 8.6 5 10l5.6 1.4L12 17l1.4-5.6L19 10l-5.6-1.4Z"></path><path d="M19 15v4"></path><path d="M17 17h4"></path></svg>
+              </button>
+              <button id="addProduct" class="icon-only" type="button" aria-label="상품 추가" title="상품 추가">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+              </button>
             </div>
           </div>
           <div id="productCards" class="product-cards" aria-label="상품 입력 목록"></div>
@@ -135,10 +150,9 @@
 
         <div class="form-section">
           <div class="section-title">
-            <span>04</span>
+            <span>05</span>
             <div>
-              <strong>혜택과 링크</strong>
-              <p>복사할 때 빠지기 쉬운 이벤트와 바로가기 링크를 정리하세요.</p>
+              <strong>혜택과 링크 <button class="help-tip" type="button" aria-label="혜택과 링크 도움말" data-tooltip="라이브 쿠폰, 카드할인, 적립, 리뷰 이벤트, 바로가기 링크를 입력합니다.">?</button></strong>
             </div>
           </div>
           <div id="benefitsField" class="field">
@@ -167,8 +181,12 @@
         </div>
 
         <div class="actions form-actions">
-          <button id="generate" class="primary" type="button">초안 만들기</button>
-          <button id="clear" type="button">비우기</button>
+          <button id="generate" class="primary icon-only" type="button" aria-label="초안 만들기" title="초안 만들기">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 10.6 8.6 5 10l5.6 1.4L12 17l1.4-5.6L19 10l-5.6-1.4Z"></path><path d="m16 17 3 3"></path><path d="M19 17v3h-3"></path></svg>
+          </button>
+          <button id="clear" class="icon-only" type="button" aria-label="입력값 비우기" title="입력값 비우기">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v7h7"></path></svg>
+          </button>
         </div>
       </div>
     </section>
@@ -180,10 +198,18 @@
           <h2>블로그 원고</h2>
         </div>
         <div class="actions compact">
-          <button id="copyTitles" type="button">제목 복사</button>
-          <button id="copyHashtags" type="button">태그 복사</button>
-          <button id="copy" type="button">본문 복사</button>
-          <button id="download" type="button">TXT 저장</button>
+          <button id="copyTitles" class="icon-only" type="button" aria-label="제목 복사" title="제목 복사">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6V4h16v2"></path><path d="M12 4v16"></path><path d="M8 20h8"></path></svg>
+          </button>
+          <button id="copyHashtags" class="icon-only" type="button" aria-label="태그 복사" title="태그 복사">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3 8 21"></path><path d="M16 3l-2 18"></path><path d="M4 9h17"></path><path d="M3 15h17"></path></svg>
+          </button>
+          <button id="copy" class="icon-only" type="button" aria-label="본문 복사" title="본문 복사">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="13" rx="2"></rect><path d="M5 16H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          </button>
+          <button id="download" class="icon-only" type="button" aria-label="TXT 저장" title="TXT 저장">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>
+          </button>
         </div>
       </div>
       <div class="meta-output">
